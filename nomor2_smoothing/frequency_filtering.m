@@ -1,32 +1,33 @@
 function [ilpf_img, glpf_img, blpf_img] = frequency_filtering(image, D0)
-    % Konversi ke double dan ke grayscale jika perlu
-    if ndims(image) == 3
-        gray = rgb2gray(image);
-    else
-        gray = image;
+    if ischar(image) || isstring(image)
+        image = imread(image);
     end
-    gray = double(gray);
+    image = im2double(image);
+    [M, N, C] = size(image);
 
-    [M, N] = size(gray);
     [u, v] = meshgrid(0:N-1, 0:M-1);
     D = sqrt((u - N/2).^2 + (v - M/2).^2);
+    H_ilpf = double(D <= D0);
+    H_glpf = exp(-(D.^2) / (2 * (D0^2)));
+    n = 2;
+    H_blpf = 1 ./ (1 + (D./D0).^(2*n));
 
-    % Filter di domain frekuensi
-    H_ilpf = double(D <= D0);  % Ideal Low Pass Filter
-    H_glpf = exp(-(D.^2) / (2 * (D0^2)));  % Gaussian LPF
-    n = 2;  % orde Butterworth
-    H_blpf = 1 ./ (1 + (D./D0).^(2*n));  % Butterworth LPF
+    ilpf_img = zeros(M, N, C);
+    glpf_img = zeros(M, N, C);
+    blpf_img = zeros(M, N, C);
 
-    % FFT citra
-    F = fftshift(fft2(gray));
+    for c = 1:C
+        F = fftshift(fft2(image(:,:,c)));
+        G_ilpf = F .* H_ilpf;
+        G_glpf = F .* H_glpf;
+        G_blpf = F .* H_blpf;
 
-    % Terapkan filter
-    G_ilpf = F .* H_ilpf;
-    G_glpf = F .* H_glpf;
-    G_blpf = F .* H_blpf;
+        ilpf_img(:,:,c) = real(ifft2(ifftshift(G_ilpf)));
+        glpf_img(:,:,c) = real(ifft2(ifftshift(G_glpf)));
+        blpf_img(:,:,c) = real(ifft2(ifftshift(G_blpf)));
+    end
 
-    % Transformasi balik
-    ilpf_img = uint8(real(ifft2(ifftshift(G_ilpf))));
-    glpf_img = uint8(real(ifft2(ifftshift(G_glpf))));
-    blpf_img = uint8(real(ifft2(ifftshift(G_blpf))));
+    ilpf_img = im2uint8(mat2gray(ilpf_img));
+    glpf_img = im2uint8(mat2gray(glpf_img));
+    blpf_img = im2uint8(mat2gray(blpf_img));
 end

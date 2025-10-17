@@ -1,8 +1,8 @@
 clear; clc; close all;
 
 % === citra ===
-img_gray  = rgb2gray(imread('../Test/image17.jpg'));
-img_color = imread('../Test/image6.jpg');
+img_gray  = rgb2gray(imread('../Test/image_no2-4.png'));
+img_color = imread('../Test/image_no2-4.png');
 
 % === PARAMETER ===
 n = 10;    % ukuran filter spasial

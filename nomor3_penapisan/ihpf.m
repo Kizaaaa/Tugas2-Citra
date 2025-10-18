@@ -1,4 +1,4 @@
-function G2 = ihpf(image)
+function G2 = ihpf(image, D0)
     [M,N] = size(image);
 
     % Step 1: Tentukan parameter padding, biasanya untuk citra f(x,y)
@@ -24,7 +24,6 @@ function G2 = ihpf(image)
     
     % Step 4: Bangkitkan fungsi penapis H berukuran P x Q
     % Penapis yang digunakan adalah Ideal Highpass Filter (IHPF)
-    D0 = 50; % cut-off frequency
     % Set up range of variables.
     u = 0:(P-1);
     v = 0:(Q-1);
@@ -51,5 +50,5 @@ function G2 = ihpf(image)
 
     %Step 7: Potong bagian kiri atas sehingga menjadi berukuran citra semula
     G2 = G2(1:M, 1:N); % Resize the image to undo padding
-    figure, imshow(G2); title('Ideal Highpass Filter Output');
+    %figure, imshow(G2); title('Ideal Highpass Filter Output');
 end

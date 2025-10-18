@@ -1,5 +1,4 @@
-function noise_filter_test(img_path)
-    I = im2double(imread(img_path));
+function noise_filter_test(I)
     if size(I,3)==3
         I_gray = rgb2gray(I);
     else

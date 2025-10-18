@@ -1,5 +1,4 @@
-function wiener_motion_blur(img_path, len, theta, K)
-    I = im2double(imread(img_path));
+function [I_restored, I_blur] = wiener_motion_blur(I, len, theta, K)
     if size(I,3) == 3
         I_blur = zeros(size(I));
         I_restored = zeros(size(I));
@@ -19,8 +18,4 @@ function wiener_motion_blur(img_path, len, theta, K)
         F_est = conj(H) ./ (abs(H).^2 + K) .* G;
         I_restored = real(ifft2(F_est));
     end
-    figure;
-    subplot(1,3,1); imshow(I); title('Original');
-    subplot(1,3,2); imshow(I_blur); title('Motion Blurred');
-    subplot(1,3,3); imshow(I_restored,[]); title('Restored (Wiener)');
 end

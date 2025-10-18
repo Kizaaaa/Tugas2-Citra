@@ -1,10 +1,6 @@
 function image_processing_gui()
 addpath('nomor1_konvolusi\')
 addpath('nomor5_derau\')
-addpath('nomor7_motion-blur\')
-addpath('nomor4\')
-addpath('nomor2_smoothing\')
-addpath('nomor3_penapisan\')
     % ===== INISIALISASI FIGURE DAN KOMPONEN =====
     fig = figure('Name', 'Image Processing GUI - Organized by Tasks', ...
                  'NumberTitle', 'off', ...
@@ -583,13 +579,12 @@ addpath('nomor3_penapisan\')
             msgbox('Invalid filter size!', 'Error', 'error');
             return;
         end
-    
-        [mean_filtered, ~] = spatial_filtering(data.original_img, n);
-        data.processed_img = mean_filtered;
+        
+        mean_filter = ones(n) / (n^2);
+        data.processed_img = konvolusi_citra(data.original_img, mean_filter);
         display_processed();
         msgbox(sprintf('Mean filter applied (%dx%d)', n, n), 'Nomor 2');
     end
-
 
     function gaussian_filter_callback(~, ~)
         if isempty(data.original_img)
@@ -602,13 +597,16 @@ addpath('nomor3_penapisan\')
             msgbox('Invalid filter size!', 'Error', 'error');
             return;
         end
-    
-        [~, gauss_filtered] = spatial_filtering(data.original_img, n);
-        data.processed_img = gauss_filtered;
+        
+        sigma = n / 6;
+        [x, y] = meshgrid(-floor(n/2):floor(n/2), -floor(n/2):floor(n/2));
+        gauss_filter = exp(-(x.^2 + y.^2) / (2 * sigma^2));
+        gauss_filter = gauss_filter / sum(gauss_filter(:));
+        
+        data.processed_img = konvolusi_citra(data.original_img, gauss_filter);
         display_processed();
-        msgbox(sprintf('Gaussian filter applied (%dx%d)', n, n), 'Nomor 3');
+        msgbox(sprintf('Gaussian filter applied (%dx%d)', n, n), 'Nomor 2');
     end
-
 
     function ilpf_callback(~, ~)
         apply_frequency_filter('ilpf');
@@ -627,31 +625,49 @@ addpath('nomor3_penapisan\')
             msgbox('Please load an image first!', 'Warning', 'warn');
             return;
         end
-    
+        
         D0 = str2double(get(edit_d0, 'String'));
         if isnan(D0) || D0 < 1
             msgbox('Invalid D0 value!', 'Error', 'error');
             return;
         end
-    
-        % Call your core frequency filtering function
-        [ilpf_img, glpf_img, blpf_img] = frequency_filtering(data.original_img, D0);
-    
+        
+        img = data.original_img;
+        if size(img, 3) == 3
+            img = rgb2gray(img);
+        end
+        
+        image = im2double(img);
+        [M, N] = size(image);
+        
+        [u, v] = meshgrid(0:N-1, 0:M-1);
+        D = sqrt((u - N/2).^2 + (v - M/2).^2);
+        
+        H_ilpf = double(D <= D0);
+        H_glpf = exp(-(D.^2) / (2 * (D0^2)));
+        n_order = 2;
+        H_blpf = 1 ./ (1 + (D./D0).^(2*n_order));
+        
         switch filter_type
             case 'ilpf'
-                data.processed_img = ilpf_img;
-                fname = 'Ideal Low-Pass Filter (ILPF)';
+                H = H_ilpf;
+                fname = 'ILPF';
             case 'glpf'
-                data.processed_img = glpf_img;
-                fname = 'Gaussian Low-Pass Filter (GLPF)';
+                H = H_glpf;
+                fname = 'GLPF';
             case 'blpf'
-                data.processed_img = blpf_img;
-                fname = 'Butterworth Low-Pass Filter (BLPF)';
+                H = H_blpf;
+                fname = 'BLPF';
         end
-    
+        
+        F = fftshift(fft2(image));
+        G = F .* H;
+        filtered = real(ifft2(ifftshift(G)));
+        
+        data.processed_img = im2uint8(mat2gray(filtered));
         display_processed();
-        msgbox(sprintf('%s applied (D0=%.2f)', fname, D0), 'Nomor 2 - Frequency Filter');
-     end
+        msgbox(sprintf('%s applied (D0=%d)', fname, D0), 'Nomor 2 - Lowpass Filter');
+    end
 
     function ihpf_callback(~, ~)
         apply_highpass_filter('ihpf');
@@ -670,33 +686,69 @@ addpath('nomor3_penapisan\')
             msgbox('Please load an image first!', 'Warning', 'warn');
             return;
         end
-    
+        
+        img = data.original_img;
+        if size(img, 3) == 3
+            img = rgb2gray(img);
+        end
+        
         D0 = str2double(get(edit_d0_hp, 'String'));
         if isnan(D0) || D0 < 1
             msgbox('Invalid D0 value!', 'Error', 'error');
             return;
         end
-    
-        img = data.original_img;
-        if size(img, 3) == 3
-            img = rgb2gray(img);
+        
+        [M, N] = size(img);
+        P = 2*M;
+        Q = 2*N;
+        
+        image = im2double(img);
+        imagep = zeros(P, Q);
+        for i = 1:P
+            for j = 1:Q
+                if i <= M && j <= N
+                    imagep(i,j) = image(i,j);
+                end
+            end
         end
-    
+        
+        F = fftshift(fft2(imagep));
+        
+        u = 0:(P-1);
+        v = 0:(Q-1);
+        idx = find(u > P/2);
+        u(idx) = u(idx) - P;
+        idy = find(v > Q/2);
+        v(idy) = v(idy) - Q;
+        
+        [V, U] = meshgrid(v, u);
+        D = sqrt(U.^2 + V.^2);
+        
         switch filter_type
             case 'ihpf'
-                G2 = ihpf(img, D0);
-                fname = 'Ideal High-Pass Filter (IHPF)';
+                H = double(D > D0);
+                fname = 'IHPF';
             case 'ghpf'
-                G2 = ghpf(img, D0);
-                fname = 'Gaussian High-Pass Filter (GHPF)';
+                H = exp(-(D.^2)./(2*(D0^2)));
+                H = 1 - H;
+                fname = 'GHPF';
             case 'bhpf'
-                G2 = bhpf(img, D0);
-                fname = 'Butterworth High-Pass Filter (BHPF)';
+                D(D == 0) = 0.01;
+                n = 2;
+                H = 1 ./ (1 + (D0./D).^(2*n));
+                fname = 'BHPF';
         end
-    
-        data.processed_img = G2;
+        
+        H = fftshift(H);
+        
+        G = H .* F;
+        G1 = ifftshift(G);
+        G2 = real(ifft2(G1));
+        G2 = G2(1:M, 1:N);
+        
+        data.processed_img = mat2gray(G2);
         display_processed();
-        msgbox(sprintf('%s applied (D0=%.2f)', fname, D0), 'Nomor 3 - Highpass Filter');
+        msgbox(sprintf('%s applied (D0=%d)', fname, D0), 'Nomor 3 - Highpass Filter');
     end
 
     function highboost_callback(~, ~)
@@ -712,15 +764,30 @@ addpath('nomor3_penapisan\')
             msgbox('Invalid parameters!', 'Error', 'error');
             return;
         end
-
-        g = brighten_frequency(data.original_img, D0, k);
         
-        data.processed_img = g;
+        img = data.original_img;
+        if size(img, 3) == 3
+            img_gray = rgb2gray(img);
+        else
+            img_gray = img;
+        end
+        
+        I_gray = im2double(img_gray);
+        [M, N] = size(I_gray);
+        F = fft2(I_gray);
+        F_shifted = fftshift(F);
+        [u, v] = meshgrid(-floor(N/2):(ceil(N/2)-1), -floor(M/2):(ceil(M/2)-1));
+        D = sqrt(u.^2 + v.^2);
+        H_lowpass = exp(-(D.^2) / (2 * (D0^2)));
+        H_highboost = (k - 1) + H_lowpass;
+        G = H_highboost .* F_shifted;
+        G_ishift = ifftshift(G);
+        g = real(ifft2(G_ishift));
+        data.processed_img = mat2gray(g);
+        
         display_processed();
-        
-        msgbox(sprintf('High-Boost filter applied (D0=%.2f, k=%.2f)', D0, k), 'Nomor 4');
+        msgbox(sprintf('High-Boost filter applied (D0=%d, k=%.2f)', D0, k), 'Nomor 4');
     end
-
 
     function noise_filter_test_callback(~, ~)
         if isempty(data.original_img)
@@ -771,19 +838,28 @@ addpath('nomor3_penapisan\')
             msgbox('Please load an image first!', 'Warning', 'warn');
             return;
         end
-    
+        
         len = str2double(get(edit_len, 'String'));
         theta = str2double(get(edit_theta, 'String'));
         K = str2double(get(edit_K, 'String'));
-    
+        
         if isnan(len) || isnan(theta) || isnan(K)
             msgbox('Invalid parameters!', 'Error', 'error');
             return;
         end
-    
+        
         I = im2double(data.original_img);
-        [I_restored, ~] = wiener_motion_blur(I, len, theta, K); 
-    
+        if size(I,3) == 3
+            I = rgb2gray(I);
+        end
+        
+        PSF = fspecial('motion', len, theta);
+        I_blur = imfilter(I, PSF, 'conv', 'circular');
+        H = psf2otf(PSF, size(I));
+        G = fft2(I_blur);
+        F_est = conj(H) ./ (abs(H).^2 + K) .* G;
+        I_restored = real(ifft2(F_est));
+        
         data.processed_img = I_restored;
         display_processed();
         msgbox(sprintf('Wiener filter applied (len=%d, theta=%d, K=%.4f)', len, theta, K), 'Nomor 7');
